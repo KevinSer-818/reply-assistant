@@ -48,6 +48,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue"
 .bar button{flex:1;padding:12px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;border:none}
 .bar .b1{background:var(--accent);color:#fff}
 .bar .b2{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+.bar .b3{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center}
 .overlay.on{display:flex}
 @media(min-width:500px){.overlay{align-items:center}}
@@ -59,6 +60,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue"
 .dialog textarea{min-height:80px;resize:vertical;font-size:14px;line-height:1.5}
 .dialog .row{display:flex;gap:8px;margin-top:16px}
 .dialog .row button{flex:1;padding:12px;border:none;border-radius:10px;font-size:15px;cursor:pointer}
+.ai-loading{text-align:center;padding:24px;color:var(--text2)}
+.ai-loading .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin:0 3px;animation:dot 1.4s infinite ease-in-out both}
+.ai-loading .dot:nth-child(1){animation-delay:-0.32s}
+.ai-loading .dot:nth-child(2){animation-delay:-0.16s}
+@keyframes dot{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+.ai-result{background:var(--bg2);padding:12px;border-radius:8px;font-size:14px;line-height:1.7;white-space:pre-wrap;max-height:300px;overflow-y:auto;margin-bottom:8px;border:1px solid var(--border)}
+details summary{font-size:12px;color:var(--text2);cursor:pointer}
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.on{opacity:1}
 mark{background:#fde047;color:#000;border-radius:2px;padding:0 2px}
@@ -67,7 +75,7 @@ mark{background:#fde047;color:#000;border-radius:2px;padding:0 2px}
 </head>
 <body>
 <div class="app">
-  <div class="header"><h1>麦麦教研 - 客服速查</h1><div class="sub">搜关键词 → 点卡片 → 复制回复 → 粘贴微信</div></div>
+  <div class="header"><h1>麦麦教研 - 客服速查</h1><div class="sub">搜关键词 / AI 智能回复 / 复制粘贴微信</div></div>
   <div class="search"><input type="search" id="s" placeholder="搜问题、关键词、回复内容…" autocomplete="off" autofocus></div>
   <div class="stats" id="st"></div>
   <div class="cats" id="cats"></div>
@@ -75,9 +83,11 @@ mark{background:#fde047;color:#000;border-radius:2px;padding:0 2px}
   <div class="none" id="none" style="display:none">没有匹配的回复</div>
 </div>
 <div class="bar">
-  <button class="b1" id="btnAdd">+ 新增回复</button>
-  <button class="b2" id="btnExport">导出知识库</button>
+  <button class="b3" id="btnAI">AI 智能回复</button>
+  <button class="b1" id="btnAdd">+ 新增</button>
+  <button class="b2" id="btnExport">导出</button>
 </div>
+
 <div class="overlay" id="ov">
   <div class="dialog">
     <h3 id="dTitle">新增回复</h3>
@@ -89,15 +99,108 @@ mark{background:#fde047;color:#000;border-radius:2px;padding:0 2px}
     <button class="b2" id="btnDel" style="display:none;width:100%;margin-top:6px;color:var(--red)">删除此条</button>
   </div>
 </div>
+
+<div class="overlay" id="aiOv">
+  <div class="dialog">
+    <h3>AI 智能回复</h3>
+    <label>家长消息 *</label>
+    <textarea id="aiMsg" rows="4" placeholder="粘贴家长发的微信消息…"></textarea>
+    <label>补充信息 (可选)</label>
+    <input id="aiExtra" placeholder="如：孩子初二、数学薄弱、之前上过两期">
+    <div class="row">
+      <button class="b2" onclick="document.getElementById('aiOv').classList.remove('on')">取消</button>
+      <button class="b1" id="aiGenBtn" onclick="aiGenerate()">生成回复</button>
+    </div>
+    <div id="aiLoading" class="ai-loading" style="display:none">AI 思考中<span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+    <div id="aiError" style="display:none;color:var(--red);font-size:13px;margin-top:8px"></div>
+    <div id="aiResultWrap" style="display:none;margin-top:12px">
+      <label>AI 生成回复</label>
+      <div id="aiResult" class="ai-result"></div>
+      <button class="b1" style="width:100%" onclick="clip(document.getElementById('aiResult').textContent)">复制回复</button>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <details>
+      <summary>API 设置 (DeepSeek)</summary>
+      <label style="margin-top:8px">API Key</label>
+      <input id="aiKey" type="password" placeholder="sk-...">
+      <div style="font-size:11px;color:var(--text2);margin-top:4px"><a href="https://platform.deepseek.com/api_keys" target="_blank">获取 Key</a> - ¥2/百万字 - 国内直连</div>
+      <button class="b2" style="width:100%;margin-top:8px" onclick="saveApiKey()">保存</button>
+    </details>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <script>
 var D = [{"q": "上课地点在哪里", "keywords": ["地址", "位置", "在哪里", "校区", "上课地点", "在哪儿", "哪儿上课"], "reply": "家长您好！咱们有两个校区可以选：\n📍 杆石桥校区（五期/六期课程）\n📍 洪家楼校区（四期/五期课程）\n您离哪个校区近？我帮您查对应时间段的课程安排。", "cat": "基础信息类"}, {"q": "有哪些科目", "keywords": ["科目", "教什么", "课程", "什么课", "学科", "有哪些课"], "reply": "咱们新高一衔接课程覆盖五大主科：\n📐 数学小班\n⚛️ 物理小班\n🧪 化学小班\n📖 语文培优\n🇬🇧 英语培优\n各科都是15天一期，学到期中考试进度。数学讲集合、逻辑、不等式与函数；物理讲力的分解（吸收好可以到牛顿第一定律和重力加速度）；化学讲金属化合物；语文分专题讲。", "cat": "基础信息类"}, {"q": "学费多少钱", "keywords": ["价格", "费用", "多少钱", "收费", "学费", "价钱", "怎么收费", "一节课多少"], "reply": "家长您好！不同科目的班型价格略有差异，具体可以加程老师微信 15589918050 或麦麦老师 13805317329 详细咨询。\n现在报名有早鸟优惠~~可以免费试听一节，满意再报名！", "cat": "基础信息类"}, {"q": "有没有一对一", "keywords": ["一对一", "1对1", "单独辅导", "私教", "小班还是大班"], "reply": "咱们目前以小班授课为主，老师能照顾到每一位学生。一对一也可以根据情况安排，但名额有限。您主要想给孩子补哪个科目？我帮您看看有没有适合的时间段。", "cat": "基础信息类"}, {"q": "一期多少天", "keywords": ["一期", "多少天", "几天", "时长", "上课时间", "课程长度", "周期"], "reply": "第一阶段每期是15天，学到期中考试进度。\n第二阶段是10天（8月3日-8月12日），是强化冲刺阶段。\n每天各时间段安排不同科目，您想看具体哪个校区的课表？", "cat": "基础信息类"}, {"q": "有没有周末班", "keywords": ["周末", "周六", "周日", "平时晚上", "工作日"], "reply": "暑假课程是按期排的，暂时没有单独的周末班。不过每天的时间段覆盖很全——从早上8:00到晚上20:30都有课，不同科目交错安排。开学后如果有周末班计划我会第一时间通知您。", "cat": "基础信息类"}, {"q": "老师是哪里的", "keywords": ["老师", "师资", "教师", "教得好不好", "什么老师", "哪个学校", "经验"], "reply": "咱们的老师全部来自济南市重点中学一线教师，平均教龄10年以上，至少带过3届以上毕业班。对新高考和中考命题方向非常熟悉。您具体关心哪个学科的老师？我可以给您介绍该科目的师资背景。", "cat": "基础信息类"}, {"q": "讲义怎么下载", "keywords": ["讲义", "资料", "打印", "下载", "课件", "教材", "发资料"], "reply": "老师每节课后会通过微信把讲义发到群里，您直接下载打印就行。如果需要纸质版也可以提前跟程老师说，咱们这边可以帮忙打印装订好，孩子来上课直接拿。", "cat": "基础信息类"}, {"q": "请假怎么处理", "keywords": ["请假", "有事", "来不了", "缺课", "补课", "调课"], "reply": "如果需要请假，请提前一天微信告诉程老师（15589918050），咱们可以安排补课时间。缺的课老师会把讲义和重点内容单独发给您，让孩子在家先看，下次上课老师也会利用课间帮孩子补一下关键知识点。", "cat": "基础信息类"}, {"q": "初中还是高中", "keywords": ["初中", "高中", "初中生", "高中生", "初一", "初二", "初三", "高一", "年级"], "reply": "咱们目前这套课是**2026年新高一衔接课程**，主要面向初中毕业即将升高中的学生。目标是帮孩子在暑假提前适应高中学习节奏，开学后快人一步。如果您需要初中的课程，也可以联系麦麦老师（13805317329）咨询，咱们初中的教研团队同样专业。", "cat": "基础信息类"}, {"q": "上课时间怎么排的", "keywords": ["上课时间", "几点", "时间段", "每天", "安排", "课表", "时间表"], "reply": "每天五个时间段，各科交错排课：\n🕗 8:00-10:00\n🕙 10:10-12:10\n🕐 13:30-15:30\n🕓 15:50-17:50\n🕡 18:30-20:30\n数学、物理、化学有小班课，英语和语文是培优课。您想看哪个校区的具体课表？", "cat": "基础信息类"}, {"q": "一期什么时候开课", "keywords": ["开课时间", "什么时候", "日期", "几月几号", "7月", "8月"], "reply": "各校区开课时间如下：\n📍 杆石桥校区：\n- 五期：7月31日-8月14日\n- 六期：8月3日-8月17日\n- 第二阶段（10天）：8月3日-8月12日\n📍 洪家楼校区：\n- 四期：7月24日-8月7日\n- 五期：7月31日-8月14日\n- 第二阶段（10天）：8月3日-8月12日\n您看哪个校区和时间段更合适？", "cat": "基础信息类"}, {"q": "怎么联系你们", "keywords": ["电话", "微信", "联系方式", "怎么报名", "程老师", "麦麦老师", "联系"], "reply": "📞 程老师：15589918050（微信同号）\n📞 麦麦老师：13805317329（微信同号）\n您可以直接加微信，方便发课表、讲义，也方便随时沟通孩子的学习情况。报名或约试听都可以联系两位老师~", "cat": "基础信息类"}, {"q": "能不能打折", "keywords": ["打折", "优惠", "便宜", "活动", "减免", "团报", "老带新"], "reply": "咱们现在有早鸟优惠——提前报名一期立减200元！如果是老学员推荐的新学员，双方都有额外优惠。具体活动可以加麦麦老师微信（13805317329）了解最新的优惠政策哦~", "cat": "学费与报名类"}, {"q": "有没有试听", "keywords": ["试听", "体验", "免费", "先看看", "了解", "试课"], "reply": "有的！咱们提供**免费试听一节**，孩子可以实际感受一下老师的教学风格和课堂氛围，您也能现场看看教室环境。试听满意再报名，不满意没有任何费用。您方便哪天？我帮您联系老师安排时间。", "cat": "学费与报名类"}, {"q": "怎么报名", "keywords": ["报名", "交费", "缴费", "怎么报", "预定", "名额"], "reply": "报名流程很简单：\n① 加程老师微信（15589918050）\n② 确定校区、科目、时间段\n③ 微信转账或到校区现场缴费（现金/扫码均可）\n④ 老师拉您进班级群，开课前发讲义资料\n先到先排班，热门时间段很快报满，建议您尽快确定哦~", "cat": "学费与报名类"}, {"q": "现在报名还来得及吗", "keywords": ["还有名额吗", "满了吗", "来得及", "报满了", "还能报吗", "截止"], "reply": "目前还有名额，但部分热门时间段比较紧，特别是数学和物理小班。您可以先告诉我孩子的年级和想报的科目，我马上帮您查一下具体还有哪些空位，先锁定名额再慢慢考虑！", "cat": "学费与报名类"}, {"q": "能不能只报一门", "keywords": ["单科", "一门", "只报一科", "多科", "有没有优惠"], "reply": "可以的！单科或多科报名都行。不过建议新高一衔接阶段至少报数学+物理两科——这两科是高中最难适应的，提前预习可以帮孩子顺利过渡。多科连报也有额外优惠，详情可以问麦麦老师。", "cat": "学费与报名类"}, {"q": "想约试听", "keywords": ["约试听", "想试听", "预约", "定时间", "安排试听"], "reply": "好的！您方便哪天来？可选的时间段：\n🕗 上午 8:00-10:00 / 10:10-12:10\n🕐 下午 13:30-15:30 / 15:50-17:50\n🕡 晚上 18:30-20:30\n告诉我您想试听哪个科目、想选哪个时间段，以及去杆石桥还是洪家楼校区，我马上帮您安排老师。", "cat": "排课约课类"}, {"q": "想换时间段", "keywords": ["换时间", "调整", "换班", "冲突", "改时间"], "reply": "没问题，如果现有时间段不合适，我帮您查一下其他时间段同科目的空位。如果另一时段已满但确实需要调整，老师在微信群发完讲义后您可以先让孩子在家看重点内容。告诉我您目前上的是哪个时段、想换到哪个时段，我来处理。", "cat": "排课约课类"}, {"q": "孩子成绩不好怎么办", "keywords": ["成绩不好", "考得差", "跟不上", "基础差", "怎么提高", "担心"], "reply": "家长您别太焦虑。刚上高一很多孩子都会有一段适应期——高中知识跨度大，跟不上正常。咱们衔接课的目的就是帮孩子提前把高一上的重点难点过一遍，开学后至少能跟上老师的节奏。数学的集合、逻辑、不等式与函数这些，提前接触过再听校内老师讲，理解起来会轻松很多。\n\n另外建议您也多鼓励孩子，高一第一次月考成绩不好不代表什么，关键是找到方法。上完咱们的课，老师会对每个孩子有一个初步评估，可以给您反馈一下孩子的学科薄弱点。", "cat": "学生情况咨询类"}, {"q": "孩子偏科怎么办", "keywords": ["偏科", "某科差", "不喜欢", "学不会", "文理", "薄弱"], "reply": "偏科是很常见的。高中阶段，我们建议理科弱的先补数学和物理（这两科是理综的基础），文科弱的先补语文和英语。\n咱们的小班课会针对每个孩子的情况做分层——基础薄弱的先从概念理解入手，学得快的可以适当往前推进。试听一节课让孩子感受一下老师的教学方式，看看能不能提起兴趣。", "cat": "学生情况咨询类"}, {"q": "孩子对学习没兴趣", "keywords": ["没兴趣", "不想学", "厌学", "抵触", "逼着学", "没动力"], "reply": "这个年龄段的孩子反感\"被安排\"很正常。建议您换一种方式——不要说\"我给你报了班\"，而是说\"咱们去体验一节，你要觉得不好就换\"。\n\n孩子学习动力不够，往往是因为难度一下子提上来了，之前自学的习惯可能还没建立起来。咱们老师的风格是启发式教学，不是填鸭，很多学生上完第一节就觉得\"原来这个也没那么难\"。可以先试试试听课，让孩子自己做决定。", "cat": "学生情况咨询类"}, {"q": "孩子学习压力大怎么办", "keywords": ["压力大", "焦虑", "失眠", "太累", "受不", "心理", "担心"], "reply": "家长您关注到孩子的情绪已经很细心了。以下几点供您参考：\n\n① 不要拿\"别人家的孩子\"比——新高一阶段，适应比排名重要\n② 每天留点自由时间——哪怕半小时运动或发呆，缓解压力\n③ 关注睡眠——高中生至少保证7小时，熬夜刷题效率反而低\n④ 如果持续情绪低落超过两周，建议跟学校心理老师聊聊\n\n咱们课堂氛围比较轻松，老师也注重跟学生的互动，不会给孩子额外的精神负担。您如果有具体担心的事，也可以随时跟我聊。", "cat": "学生情况咨询类"}, {"q": "想跟老师聊聊孩子情况", "keywords": ["跟老师聊", "反馈", "了解一下", "学得怎么样", "上课表现"], "reply": "没问题！每节课后老师会在家长群做简要反馈。如果想单独聊，您可以加授课老师微信，或者约个时间在接送孩子的时候当面聊10分钟。您主要想了解哪方面——课堂表现、作业完成情况、还是考试成绩分析？我帮您提前跟老师说一下。", "cat": "学生情况咨询类"}, {"q": "怎么交费", "keywords": ["交费", "付款", "转账", "怎么支付", "微信支付", "现金"], "reply": "缴费方式有两种：\n💳 微信转账（推荐，方便对账）：转给程老师微信 15589918050\n💵 到校区现场缴费：现金或扫码均可\n转账后请截图发程老师确认，老师会开收据并拉您进班级群~", "cat": "支付与对账类"}, {"q": "退费怎么处理", "keywords": ["退费", "退款", "不上了", "不想上", "退钱"], "reply": "如果确实需要退费，按照剩余未上课时退。您联系程老师（15589918050），老师会在24小时内核算剩余课时和金额，微信原路退回。咱们的原则是课时费只收上过的课，您放心。", "cat": "支付与对账类"}, {"q": "对账问题", "keywords": ["对账", "账单", "收据", "发票", "没收到", "确认"], "reply": "好的，对账方面您联系麦麦老师（13805317329），她会帮您整理完整的缴费记录和课时消费明细。如果需要发票也可以一并开具。", "cat": "支付与对账类"}, {"q": "数学教什么", "keywords": ["数学", "集合", "逻辑", "不等式", "函数", "高一数学"], "reply": "新高一数学第一阶段主要讲：集合、逻辑、不等式与函数。这是高一上学期期中考试的核心内容。这些概念从初中到高中跨度很大——特别是函数从具体到抽象的转变，是大部分学生最不适应的点。咱们老师会从基础概念入手，帮孩子建立高中数学思维。", "cat": "课程内容类"}, {"q": "物理教什么", "keywords": ["物理", "力的分解", "牛顿", "重力", "高一物理"], "reply": "物理第一阶段重点讲**力的分解**，这是高一物理的第一个难点。如果学生吸收得好，老师会继续往下讲牛顿第一定律和重力加速度。高中物理对数学基础要求高，特别是向量和三角函数——咱们老师会在讲物理的同时帮孩子补上需要的数学工具。", "cat": "课程内容类"}, {"q": "化学教什么", "keywords": ["化学", "金属", "化合物", "高一化学", "方程式"], "reply": "化学第一阶段讲**金属化合物**，涉及钠、铝、铁等重要金属元素及其化合物的性质和反应方程式。这是高一化学的核心章节，也是高考必考内容。老师会带学生做实验演示（有视频辅助），帮孩子建立化学实验思维，不只是死记硬背方程式。", "cat": "课程内容类"}, {"q": "语文怎么教", "keywords": ["语文", "阅读", "作文", "文言文", "专题"], "reply": "语文是分专题讲，不按照课本顺序。主要覆盖：古诗文阅读与鉴赏、现代文阅读技巧、议论文写作方法。高中语文和初中最大的区别是重思维深度轻标准答案。咱们的语文培优课重点训练孩子的文本分析能力和议论文写作，这两项是高考拉分的关键。", "cat": "课程内容类"}, {"q": "英语怎么教", "keywords": ["英语", "语法", "阅读", "单词", "高一英语", "培优"], "reply": "英语培优课重点在阅读理解和语法体系的搭建。新高考英语阅读难度大幅提高，词汇量要求从初中1500词跳到高中3500词。咱们老师会系统梳理高中核心语法、带着孩子精读高考真题难度的文章、积累高频词汇和短语。课上不讲\"死记硬背\"，而是教孩子用词根词缀推断词义、用文章结构抓主旨。", "cat": "课程内容类"}, {"q": "要不要继续报班", "keywords": ["继续报", "还要上吗", "下期", "续报", "效果"], "reply": "这个看孩子的感受和您观察到的变化。建议关注以下几点：\n① 孩子上课是否主动（不是被您催着来）\n② 回学校后该科目的作业完成度有没有提高\n③ 月考或期中考该科目的排名变化\n\n如果以上有1-2项有明显改善，说明课是有效的。咱们老师会在课程结束前给每个孩子一份评估建议，帮您判断是否需要继续。", "cat": "家长黏连度类"}, {"q": "初升高衔接重要吗", "keywords": ["衔接", "初中升高", "必要", "有用吗", "不报行不行"], "reply": "说实话——非常有必要。高中和初中知识不是一个量级。举个例子：初中三年学六本数学书，高中一年就要学完四本——进度快、深度大。不提前接触的话，60%以上的学生高一第一次月考会明显下滑。不光是知识衔接，还有学习方法的转变——高中更需要自学能力和逻辑思维，这些光靠学校老师灌输是不够的。", "cat": "家长黏连度类"}, {"q": "有没有老学员分享", "keywords": ["之前的", "去年", "效果", "评价", "口碑", "成绩", "考得好"], "reply": "有的！去年暑假上了咱们新高一衔接课的学员，大部分在高一期中考中数学和物理排到了班级前50%。有几个比较突出的案例：一个初中数学基础一般的孩子，上了衔接课后开学数学月考考了班级第8名；还有一个物理从零开始的学生，上完课物理期中83分。\n\n如果您感兴趣，开课后可以在咱们家长微信群里看到完整的上课记录、精彩互动统计以及学员心得反馈~", "cat": "家长黏连度类"}, {"q": "能帮忙看下孩子的学习规划吗", "keywords": ["规划", "计划", "建议", "怎么学", "下学期", "选科"], "reply": "当然可以！您方便告诉我孩子目前的情况吗？\n- 初中哪个科目最薄弱？\n- 平时学习习惯怎么样？（主动学还是需要督促）\n- 高中有没有初步的选科方向？（物理类还是历史类）\n\n了解到这些信息后，我可以结合咱们老师的经验给您一个针对性的建议。建议带孩子一起来校区跟老师当面聊一次，效果更好~", "cat": "家长黏连度类"}];
-var STORAGE = 'ra_v5', STORAGE_DEL = 'ra_del_v5';
+var STORAGE = 'ra_v5', STORAGE_DEL = 'ra_del_v5', STORAGE_KEY = 'ai_key';
 var custom = JSON.parse(localStorage.getItem(STORAGE) || '[]');
 var deleted = JSON.parse(localStorage.getItem(STORAGE_DEL) || '[]');
 var activeCat = '';
 var openCards = {};
 var editingIdx = null;
+
+// Load API key
+var apiKey = localStorage.getItem(STORAGE_KEY) || '';
+if (apiKey) document.getElementById('aiKey').value = apiKey;
+function saveApiKey() {
+  apiKey = document.getElementById('aiKey').value.trim();
+  localStorage.setItem(STORAGE_KEY, apiKey);
+  toast(apiKey ? 'API Key 已保存' : 'API Key 已清除');
+}
+
+// AI Generate
+function aiGenerate() {
+  if (!apiKey) { toast('请先设置 DeepSeek API Key'); return; }
+  var msg = document.getElementById('aiMsg').value.trim();
+  if (!msg) { toast('请粘贴家长消息'); return; }
+  var extra = document.getElementById('aiExtra').value.trim();
+
+  document.getElementById('aiGenBtn').disabled = true;
+  document.getElementById('aiLoading').style.display = 'block';
+  document.getElementById('aiError').style.display = 'none';
+  document.getElementById('aiResultWrap').style.display = 'none';
+
+  // Build knowledge context
+  var kb = all().map(function(q) {
+    return '【' + (q.cat||'') + '】Q: ' + q.q + '\nA: ' + q.reply;
+  }).join('\n\n');
+
+  var systemPrompt = '你是麦麦教研团队的客服助手，负责回复学生家长的咨询。使用亲切、专业的语气，像真人老师一样自然对话。\n\n' +
+    '以下是知识库，请严格基于知识库内容回复，不要编造信息。如果知识库没有覆盖的问题，诚实告知家长，并引导联系老师。\n\n' +
+    '=== 知识库 ===\n' + kb + '\n=== 知识库结束 ===\n\n' +
+    '回复要求：1. 开头加称呼"家长您好" 2. 分点清晰 3. 主动引导下一步 4. 语气温暖不机械';
+
+  var userMsg = '家长发来消息：' + msg;
+  if (extra) userMsg += '\n\n补充信息：' + extra;
+
+  fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMsg }
+      ],
+      temperature: 0.7,
+      max_tokens: 1024
+    })
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error(e.error && e.error.message || 'HTTP ' + r.status); });
+    return r.json();
+  }).then(function(data) {
+    var reply = data.choices[0].message.content;
+    document.getElementById('aiResult').textContent = reply;
+    document.getElementById('aiLoading').style.display = 'none';
+    document.getElementById('aiResultWrap').style.display = 'block';
+    document.getElementById('aiGenBtn').disabled = false;
+  }).catch(function(err) {
+    document.getElementById('aiLoading').style.display = 'none';
+    document.getElementById('aiError').style.display = 'block';
+    document.getElementById('aiError').textContent = '错误: ' + err.message;
+    document.getElementById('aiGenBtn').disabled = false;
+  });
+}
 
 function all() {
   var core = D.map(function(q, i) { var o = JSON.parse(JSON.stringify(q)); o._idx = i; return o; });
@@ -120,18 +223,11 @@ function render() {
   document.getElementById('st').textContent = '共 ' + qs.length + ' 条';
   document.getElementById('none').style.display = qs.length ? 'none' : 'block';
 
-  // Category tabs
-  var seen = {};
-  var cats = [];
+  var seen = {}, cats = [];
   all().forEach(function(q) { if (q.cat && !seen[q.cat]) { seen[q.cat] = true; cats.push(q.cat); } });
-  var catsHtml = '';
-  catsHtml += '<span class="cat' + (!activeCat ? ' on' : '') + '" data-cat="">全部</span>';
-  cats.forEach(function(c) {
-    catsHtml += '<span class="cat' + (activeCat === c ? ' on' : '') + '" data-cat="' + he(c) + '">' + he(c) + '</span>';
-  });
-  document.getElementById('cats').innerHTML = catsHtml;
+  document.getElementById('cats').innerHTML = '<span class="cat' + (!activeCat ? ' on' : '') + '" data-cat="">全部</span>' +
+    cats.map(function(c) { return '<span class="cat' + (activeCat === c ? ' on' : '') + '" data-cat="' + he(c) + '">' + he(c) + '</span>'; }).join('');
 
-  // Cards
   var listHtml = '';
   qs.forEach(function(q) {
     var cls = openCards[q._idx] ? 'card open' : 'card';
@@ -151,24 +247,17 @@ function render() {
   document.getElementById('l').innerHTML = listHtml;
 }
 
-// Event delegation: button actions FIRST, then card toggle
 document.addEventListener('click', function(e) {
-  // Button actions (must be checked before card toggle)
   var btn = e.target.closest('button[data-act]');
   if (btn) {
-    var act = btn.dataset.act;
-    var i = parseInt(btn.dataset.i);
+    var act = btn.dataset.act, i = parseInt(btn.dataset.i);
     if (act === 'copyReply') copyReply(i);
     else if (act === 'copyQ') copyQ(i);
     else if (act === 'editItem') editItem(i);
     return;
   }
-
-  // Category click
   var catEl = e.target.closest('.cat');
   if (catEl) { activeCat = catEl.dataset.cat; render(); return; }
-
-  // Card click (toggle open)
   var card = e.target.closest('.card');
   if (card) {
     var idx = parseInt(card.dataset.i);
@@ -177,64 +266,48 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Category click delegation
-document.getElementById('cats').addEventListener('click', function(e) {
-  var catEl = e.target.closest('.cat');
-  if (!catEl) return;
-  activeCat = catEl.dataset.cat;
-  render();
-});
-
 document.getElementById('s').addEventListener('input', render);
 document.getElementById('btnAdd').addEventListener('click', showAdd);
 document.getElementById('btnExport').addEventListener('click', exportData);
+document.getElementById('btnAI').addEventListener('click', function() { document.getElementById('aiOv').classList.add('on'); setTimeout(function(){ document.getElementById('aiMsg').focus(); },300); });
 document.getElementById('btnSave').addEventListener('click', saveItem);
 document.getElementById('btnCancel').addEventListener('click', closeModal);
 document.getElementById('btnDel').addEventListener('click', delItem);
 document.getElementById('ov').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+document.getElementById('aiOv').addEventListener('click', function(e) { if (e.target === this) document.getElementById('aiOv').classList.remove('on'); });
 
 function copyReply(idx) {
   var q = all().find(function(q) { return q._idx === idx; });
-  if (!q) return;
-  clip(q.reply);
+  if (!q) return; clip(q.reply);
 }
 function copyQ(idx) {
   var q = all().find(function(q) { return q._idx === idx; });
-  if (!q) return;
-  clip(q.q);
+  if (!q) return; clip(q.q);
 }
 function clip(txt) {
-  // iOS Safari prefers execCommand approach
   var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
   if (!isIOS && navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(txt).then(function() { toast('已复制'); }).catch(function() { fallback(txt); });
   } else { fallback(txt); }
 }
 function fallback(txt) {
-  var ta = document.createElement('textarea');
-  ta.value = txt;
+  var ta = document.createElement('textarea'); ta.value = txt;
   ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
-  document.body.appendChild(ta);
-  ta.focus();
-  ta.select();
-  ta.setSelectionRange(0, 999999);
-  try { document.execCommand('copy'); toast('已复制'); } catch(e) { toast('复制失败，请长按选择复制'); }
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, 999999);
+  try { document.execCommand('copy'); toast('已复制'); } catch(e) { toast('复制失败'); }
   document.body.removeChild(ta);
 }
 
 function showAdd() {
   editingIdx = null;
   document.getElementById('dTitle').textContent = '新增回复';
-  document.getElementById('mq').value = '';
-  document.getElementById('mkw').value = '';
-  document.getElementById('mr').value = '';
+  document.getElementById('mq').value = ''; document.getElementById('mkw').value = ''; document.getElementById('mr').value = '';
   document.getElementById('btnDel').style.display = 'none';
   document.getElementById('ov').classList.add('on');
   setTimeout(function() { document.getElementById('mq').focus(); }, 300);
 }
 function editItem(idx) {
-  var q = all().find(function(q) { return q._idx === idx; });
-  if (!q) return;
+  var q = all().find(function(q) { return q._idx === idx; }); if (!q) return;
   editingIdx = idx;
   document.getElementById('dTitle').textContent = '编辑回复';
   document.getElementById('mq').value = q.q;
@@ -249,12 +322,7 @@ function saveItem() {
   var qText = document.getElementById('mq').value.trim();
   var reply = document.getElementById('mr').value.trim();
   if (!qText || !reply) { toast('问题和回复不能为空'); return; }
-  var item = {
-    q: qText,
-    keywords: document.getElementById('mkw').value.split(/[,，]/).map(function(s) { return s.trim(); }).filter(Boolean),
-    cat: document.getElementById('mcat').value,
-    reply: reply
-  };
+  var item = { q: qText, keywords: document.getElementById('mkw').value.split(/[,，]/).map(function(s) { return s.trim(); }).filter(Boolean), cat: document.getElementById('mcat').value, reply: reply };
   if (editingIdx !== null) {
     if (editingIdx < D.length) { custom.push(item); deleted.push(editingIdx); localStorage.setItem(STORAGE_DEL, JSON.stringify(deleted)); }
     else { custom[editingIdx - D.length] = item; }
@@ -264,9 +332,8 @@ function saveItem() {
 }
 function delItem() {
   if (editingIdx === null) return;
-  if (!confirm('确定删除？')) return;
-  deleted.push(editingIdx);
-  localStorage.setItem(STORAGE_DEL, JSON.stringify(deleted));
+  if (!confirm('删除？')) return;
+  deleted.push(editingIdx); localStorage.setItem(STORAGE_DEL, JSON.stringify(deleted));
   closeModal(); render(); toast('已删除');
 }
 function exportData() {
@@ -294,29 +361,14 @@ function toast(m) {
   var el = document.getElementById('toast'); el.textContent = m; el.classList.add('on');
   clearTimeout(el._t); el._t = setTimeout(function() { el.classList.remove('on'); }, 1800);
 }
-
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') { closeModal(); document.getElementById('aiOv').classList.remove('on'); }
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); document.getElementById('s').focus(); }
 });
 
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
+
 render();
-
-// Register service worker for offline PWA
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(function(){});
-}
-
-// PWA install prompt
-var deferredPrompt;
-window.addEventListener('beforeinstallprompt', function(e) {
-  e.preventDefault();
-  deferredPrompt = e;
-});
-window.addEventListener('appinstalled', function() {
-  deferredPrompt = null;
-  toast('安装成功！');
-});
 </script>
 </body>
 </html>
